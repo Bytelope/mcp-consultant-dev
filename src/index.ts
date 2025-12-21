@@ -2,27 +2,32 @@ import { z } from "zod";
 
 const API_BASE_URL = "https://consultant.dev/api";
 
-// Types
 interface Assignment {
   id: string;
   title: string;
-  company: string;
-  location: string;
-  description: string;
   url: string;
-  posted: string;
-  deadline: string;
-  source: string;
-  scraped_at: string;
-  role: string;
-  role_category: string;
-  seniority_level: string;
-  employment_type: string;
-  skills: string[];
-  quality_score: number;
-  location_hierarchy: { type: string; name: string }[];
-  country_codes: string[];
-  easy_apply: { enabled: boolean; url?: string };
+  company?: string;
+  location?: string;
+  description?: string;
+  posted?: string;
+  deadline?: string;
+  source?: string;
+  role?: string;
+  role_category?: string;
+  seniority_level?: string;
+  employment_type?: string;
+  skills?: string[];
+  quality_score?: number;
+  location_hierarchy?: { type: string; name: string }[];
+  country_codes?: string[];
+  easy_apply?: { enabled: boolean; url?: string };
+  company_name?: string;
+  hourly_rate?: number;
+  duration?: string;
+  start_date?: string;
+  end_date?: string;
+  languages?: string[];
+  security_clearance?: boolean;
 }
 
 interface SearchResponse {
@@ -59,6 +64,49 @@ async function fetchAPI(endpoint: string, params: Record<string, string> = {}): 
   return response.json();
 }
 
+// Location coordinates cache for geo-filtering
+let locationCoords: Record<string, { lat: number; lon: number }> = {};
+let coordsLoaded = false;
+
+async function loadLocationCoords(): Promise<void> {
+  if (coordsLoaded) return;
+
+  try {
+    const resp = await fetch("https://consultant.dev/data/location-coordinates.json");
+    const data = await resp.json() as {
+      län?: Record<string, { name: string; lat: number; lon: number }>;
+      kommuner?: Record<string, { name: string; lat: number; lon: number }>;
+      cities?: Record<string, { lat: number; lon: number }>;
+    };
+
+    // Build lookup from län (counties)
+    for (const [, info] of Object.entries(data.län || {})) {
+      const name = info.name.toLowerCase();
+      locationCoords[name] = { lat: info.lat, lon: info.lon };
+      // Also add without "s län" suffix for easier matching
+      const shortName = name.replace(/s län$/, "").replace(/ län$/, "");
+      if (shortName !== name) {
+        locationCoords[shortName] = { lat: info.lat, lon: info.lon };
+      }
+    }
+
+    // Build lookup from kommuner (municipalities)
+    for (const [, info] of Object.entries(data.kommuner || {})) {
+      const name = info.name.toLowerCase();
+      locationCoords[name] = { lat: info.lat, lon: info.lon };
+    }
+
+    // Build lookup from cities
+    for (const [name, info] of Object.entries(data.cities || {})) {
+      locationCoords[name.toLowerCase()] = { lat: info.lat, lon: info.lon };
+    }
+
+    coordsLoaded = true;
+  } catch (e) {
+    console.error("Failed to load location coordinates:", e);
+  }
+}
+
 // Tool schemas
 const SearchArgsSchema = z.object({
   query: z.string().optional(),
@@ -67,6 +115,9 @@ const SearchArgsSchema = z.object({
   limit: z.number().int().min(1).max(20).optional().default(10),
   role: z.string().optional(),
   location: z.string().optional(),
+  geo_lat: z.number().optional(),
+  geo_lon: z.number().optional(),
+  geo_radius: z.number().optional(),
   seniority: z.enum(["junior", "regular", "senior", "lead"]).optional(),
   employment_type: z.string().optional(),
   skills: z.array(z.string()).optional(),
@@ -105,7 +156,7 @@ const TOOLS = [
   // Extended tools for other MCP clients (Claude, etc.)
   {
     name: "search_assignments",
-    description: "Search for freelance jobs, consultant assignments, and contract work. Use this when users ask to find jobs, look for work, search for assignments, or want employment opportunities. Supports filtering by location (e.g., Stockholm, Remote), role (e.g., Backend Developer, Data Engineer), skills (e.g., Python, AWS), and seniority level.",
+    description: "Search for IT consultant jobs in Sweden. Location names like 'Stockholm', 'Göteborg', 'Malmö' are automatically resolved to coordinates for precise filtering within 50km radius. Use this when users ask to find jobs, look for work, search for assignments, or want employment opportunities.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -114,7 +165,10 @@ const TOOLS = [
         page: { type: "number", minimum: 1, default: 1 },
         limit: { type: "number", minimum: 1, maximum: 20, default: 10 },
         role: { type: "string", description: "Filter by job role (e.g., 'Backend Developer', 'Data Engineer', 'DevOps Engineer')" },
-        location: { type: "string", description: "Filter by location (e.g., 'Stockholm', 'Gothenburg', 'Remote', 'Sweden')" },
+        location: { type: "string", description: "City or region name (e.g., 'Stockholm', 'Göteborg', 'Malmö', 'Remote'). Auto-resolved to geo-coordinates for precise 50km radius filtering." },
+        geo_lat: { type: "number", description: "Latitude for geo-filtering (overrides location)" },
+        geo_lon: { type: "number", description: "Longitude for geo-filtering (overrides location)" },
+        geo_radius: { type: "number", description: "Search radius in km (default: 50)" },
         seniority: { type: "string", enum: ["junior", "regular", "senior", "lead"], description: "Filter by experience level" },
         employment_type: { type: "string", description: "Filter by employment type (e.g., 'contractor', 'freelance')" },
         skills: { type: "array", items: { type: "string" }, description: "Filter by required skills (e.g., ['Python', 'AWS', 'Kubernetes'])" },
@@ -212,14 +266,42 @@ async function handleChatGPTFetch(args: z.infer<typeof ChatGPTFetchArgsSchema>) 
 
 // Extended tool handlers (for Claude and other MCP clients)
 async function handleSearchAssignments(args: z.infer<typeof SearchArgsSchema>) {
+  // Ensure coordinates are loaded for geo-filtering
+  await loadLocationCoords();
+
   const params: Record<string, string> = {
     sort: args.sort || "quality",
     page: String(args.page || 1),
     limit: String(args.limit || 10),
   };
+
+  // Handle geo-coordinates
+  if (args.geo_lat && args.geo_lon) {
+    // Use explicit coordinates provided by user
+    params.geo_lat = String(args.geo_lat);
+    params.geo_lon = String(args.geo_lon);
+    params.geo_radius = String(args.geo_radius || 50);
+  } else if (args.location) {
+    const normalized = args.location.toLowerCase().trim();
+    // Check if it's "remote" or similar - pass through as string
+    if (normalized === "remote" || normalized === "distans") {
+      params.location = args.location;
+    } else {
+      // Try to resolve location name to coordinates
+      const coords = locationCoords[normalized];
+      if (coords) {
+        params.geo_lat = String(coords.lat);
+        params.geo_lon = String(coords.lon);
+        params.geo_radius = String(args.geo_radius || 50);
+      } else {
+        // Fallback to string location for unknown places
+        params.location = args.location;
+      }
+    }
+  }
+
   if (args.query) params.q = args.query;
   if (args.role) params.role = args.role;
-  if (args.location) params.location = args.location;
   if (args.seniority) params.seniority = args.seniority;
   if (args.employment_type) params.employment_type = args.employment_type;
   if (args.skills?.length) params.skills = args.skills.join(",");
