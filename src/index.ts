@@ -746,7 +746,7 @@ function getLandingPageHtml(): string {
   <div class="container">
     <div class="hero">
       <div class="badge"><span class="badge-dot"></span>MCP Server</div>
-      <h1>Connect Your AI to <span>Sweden's Largest Job Database</span></h1>
+      <h1>Connect Your AI to <span>Live Job Data</span></h1>
       <p>Search thousands of consultant assignments directly from Claude, Cursor, ChatGPT, and more.</p>
       <div class="meta">
         <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>No API key required</span>
