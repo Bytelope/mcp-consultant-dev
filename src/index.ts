@@ -603,98 +603,255 @@ export default {
 };
 
 function getLandingPageHtml(): string {
+  // Generate tools list dynamically from TOOLS array (skip ChatGPT-compat duplicates)
+  const toolsHtml = TOOLS
+    .filter(t => !["search", "fetch"].includes(t.name))
+    .map(t => `<li><span class="tool-name">${t.name}</span><br><span class="tool-desc">${t.description.split('.')[0]}.</span></li>`)
+    .join('\n        ');
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MCP Server - Consultant.dev</title>
-  <link rel="stylesheet" href="https://consultant.dev/theme.css">
+  <meta name="description" content="Search consultant jobs directly from your AI. Free MCP Server for Claude, Cursor, ChatGPT, and more.">
   <link rel="icon" href="https://consultant.dev/favicon.svg" type="image/svg+xml">
   <style>
+    :root {
+      --color-bg: #ffffff;
+      --color-bg-subtle: #f6f9fc;
+      --color-bg-muted: #edf2f7;
+      --color-text: #0a2540;
+      --color-text-secondary: #425466;
+      --color-text-muted: #566678;
+      --color-primary: #067267;
+      --color-primary-hover: #055d54;
+      --color-border: #e3e8ee;
+      --color-border-subtle: #f0f4f8;
+      --color-card: #ffffff;
+      --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --radius-sm: 6px;
+      --shadow-sm: 0 1px 2px rgba(50, 50, 93, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-family: var(--font-family); font-size: 15px; line-height: 1.6; color: var(--color-text); background: var(--color-bg-subtle); -webkit-font-smoothing: antialiased; }
     body { min-height: 100vh; padding: 2rem 1rem; }
-    .container { max-width: 720px; margin: 0 auto; }
-    .hero { text-align: center; margin-bottom: 3rem; }
-    .hero h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.75rem; }
-    .hero p { color: var(--color-text-secondary); font-size: 1.0625rem; }
+    .container { max-width: 800px; margin: 0 auto; }
+
+    /* Hero */
+    .hero { text-align: center; margin-bottom: 2.5rem; }
+    .badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.375rem 0.75rem; background: var(--color-bg-muted); border-radius: 999px; font-size: 0.75rem; font-weight: 500; color: var(--color-text-muted); margin-bottom: 1rem; }
+    .badge-dot { width: 8px; height: 8px; background: var(--color-primary); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .hero h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 700; margin-bottom: 0.5rem; }
+    .hero h1 span { color: var(--color-primary); }
+    .hero p { color: var(--color-text-secondary); font-size: 1rem; margin-bottom: 1rem; }
+    .meta { display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; font-size: 0.8125rem; color: var(--color-text-muted); }
+    .meta span { display: flex; align-items: center; gap: 0.375rem; }
+    .meta svg { width: 14px; height: 14px; color: var(--color-primary); }
+
+    /* Video */
+    .video-section { margin-bottom: 2rem; }
+    .video-tabs { display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1rem; }
+    .video-tab { display: flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1rem; background: var(--color-card); border: 1px solid var(--color-border); border-radius: 999px; font-size: 0.8125rem; font-weight: 500; color: var(--color-text-muted); cursor: pointer; transition: all 0.2s; }
+    .video-tab:hover { border-color: var(--color-primary); color: var(--color-text); }
+    .video-tab.active { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+    .video-tab svg { width: 14px; height: 14px; }
+    .video-container { aspect-ratio: 16/9; border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--color-border); box-shadow: var(--shadow-sm); }
+    .video-container iframe { width: 100%; height: 100%; border: none; display: none; }
+    .video-container iframe.active { display: block; }
+
+    /* Sections */
     .section { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.5rem; }
-    .section h2 { font-size: 0.875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); margin-bottom: 1rem; }
-    .code-block { background: var(--color-bg-muted); border-radius: var(--radius); padding: 1rem; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.8125rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
-    .code-block code { color: var(--color-text); }
+    .section h2 { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); margin-bottom: 1rem; }
+
+    /* Setup tabs */
+    .tabs { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-bottom: 1rem; }
+    .tab { padding: 0.5rem 0.875rem; border-radius: var(--radius-sm); background: var(--color-bg-subtle); color: var(--color-text-muted); cursor: pointer; font-size: 0.8125rem; font-weight: 500; border: none; transition: all 0.2s; }
+    .tab:hover { background: var(--color-bg-muted); color: var(--color-text); }
+    .tab.active { background: var(--color-primary); color: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .code-block { background: #0d1117; border-radius: var(--radius); padding: 1rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8125rem; overflow-x: auto; }
+    .code-block code { color: #c9d1d9; white-space: pre-wrap; word-break: break-all; }
+    .note { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.75rem; }
+
+    /* Tools */
     .tools-list { list-style: none; }
-    .tools-list li { padding: 0.75rem 0; border-bottom: 1px solid var(--color-border-subtle); }
+    .tools-list li { padding: 0.625rem 0; border-bottom: 1px solid var(--color-border-subtle); }
     .tools-list li:last-child { border-bottom: none; }
-    .tool-name { font-weight: 600; color: var(--color-primary); }
-    .tool-desc { color: var(--color-text-secondary); font-size: 0.875rem; }
-    .links { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-    .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1.25rem; border-radius: var(--radius); font-size: 0.875rem; font-weight: 600; text-decoration: none; transition: all 0.15s ease; }
+    .tool-name { font-weight: 600; color: var(--color-primary); font-family: 'SF Mono', Monaco, monospace; font-size: 0.875rem; }
+    .tool-desc { color: var(--color-text-secondary); font-size: 0.8125rem; }
+
+    /* Prompts */
+    .prompts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; }
+    .prompt-card { padding: 0.875rem; background: var(--color-bg-subtle); border: 1px solid var(--color-border-subtle); border-radius: var(--radius); cursor: pointer; transition: all 0.2s; }
+    .prompt-card:hover { border-color: var(--color-primary); }
+    .prompt-cat { font-size: 0.625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); margin-bottom: 0.375rem; }
+    .prompt-text { font-size: 0.8125rem; color: var(--color-text); line-height: 1.4; }
+    .prompt-copy { font-size: 0.6875rem; color: var(--color-text-muted); margin-top: 0.5rem; }
+    .prompt-card.copied .prompt-copy { color: var(--color-primary); }
+
+    /* Links */
+    .links { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin-top: 2rem; }
+    .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1.25rem; border-radius: var(--radius); font-size: 0.875rem; font-weight: 600; text-decoration: none; transition: all 0.15s; }
     .btn-primary { background: var(--color-primary); color: white; }
     .btn-primary:hover { background: var(--color-primary-hover); }
     .btn-ghost { background: transparent; color: var(--color-text-muted); border: 1px solid var(--color-border); }
     .btn-ghost:hover { color: var(--color-primary); border-color: var(--color-primary); }
-    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-    .tab { padding: 0.5rem 1rem; border-radius: var(--radius-sm); background: var(--color-bg-subtle); color: var(--color-text-muted); cursor: pointer; font-size: 0.875rem; font-weight: 500; border: none; }
-    .tab.active { background: var(--color-primary); color: white; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    .note { font-size: 0.8125rem; color: var(--color-text-muted); margin-top: 0.75rem; }
+    .btn svg { width: 16px; height: 16px; }
+
+    @media (max-width: 600px) {
+      .tabs { gap: 0.25rem; }
+      .tab { padding: 0.375rem 0.625rem; font-size: 0.75rem; }
+      .prompts-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="hero">
-      <h1>Consultant Jobs MCP Server</h1>
-      <p>Connect your AI to Sweden's largest consultant job database</p>
+      <div class="badge"><span class="badge-dot"></span>MCP Server</div>
+      <h1>Connect Your AI to <span>Sweden's Largest Job Database</span></h1>
+      <p>Search thousands of consultant assignments directly from Claude, Cursor, ChatGPT, and more.</p>
+      <div class="meta">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>No API key required</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Privacy-first</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Real-time data</span>
+      </div>
+    </div>
+
+    <div class="video-section">
+      <div class="video-tabs">
+        <button class="video-tab active" onclick="showVideo('demo')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Live Demo
+        </button>
+        <button class="video-tab" onclick="showVideo('setup')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          Setup Guide
+        </button>
+      </div>
+      <div class="video-container">
+        <iframe id="video-demo" class="active" src="https://www.youtube-nocookie.com/embed/4h4EGE2kcmY" title="MCP Demo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+        <iframe id="video-setup" src="https://www.youtube-nocookie.com/embed/olh4NVlSG0s" title="Setup Guide" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+      </div>
     </div>
 
     <div class="section">
       <h2>Quick Setup</h2>
       <div class="tabs">
-        <button class="tab active" onclick="showTab('claude')">Claude Desktop</button>
-        <button class="tab" onclick="showTab('chatgpt')">ChatGPT / Web</button>
+        <button class="tab active" onclick="showTab('claude-code')">Claude Code</button>
+        <button class="tab" onclick="showTab('claude-desktop')">Claude Desktop</button>
+        <button class="tab" onclick="showTab('cursor')">Cursor</button>
+        <button class="tab" onclick="showTab('chatgpt')">ChatGPT</button>
+        <button class="tab" onclick="showTab('vscode')">VS Code</button>
       </div>
-      <div id="claude" class="tab-content active">
-        <div class="code-block"><code>npx -y @anthropic-ai/create-mcp add-sse https://mcp.consultant.dev/sse</code></div>
-        <p class="note">Or add manually to claude_desktop_config.json:</p>
+      <div id="claude-code" class="tab-content active">
+        <div class="code-block"><code>claude mcp add --transport http consultant-jobs https://mcp.consultant.dev/mcp</code></div>
+      </div>
+      <div id="claude-desktop" class="tab-content">
         <div class="code-block"><code>{
   "mcpServers": {
     "consultant-jobs": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.consultant.dev/sse"]
+      "url": "https://mcp.consultant.dev/mcp"
     }
   }
 }</code></div>
+        <p class="note">Add to claude_desktop_config.json</p>
+      </div>
+      <div id="cursor" class="tab-content">
+        <div class="code-block"><code>{
+  "consultant-jobs": {
+    "url": "https://mcp.consultant.dev/mcp"
+  }
+}</code></div>
+        <p class="note">Add to MCP Settings in Cursor</p>
       </div>
       <div id="chatgpt" class="tab-content">
-        <p class="note" style="margin-top: 0; margin-bottom: 0.75rem;">Use the SSE endpoint for ChatGPT and other web-based AI tools:</p>
         <div class="code-block"><code>https://mcp.consultant.dev/sse</code></div>
+        <p class="note">Add as MCP Connector in ChatGPT Settings</p>
+      </div>
+      <div id="vscode" class="tab-content">
+        <div class="code-block"><code>{
+  "mcp": {
+    "servers": {
+      "consultant-jobs": {
+        "url": "https://mcp.consultant.dev/mcp"
+      }
+    }
+  }
+}</code></div>
+        <p class="note">Add to VS Code settings.json</p>
       </div>
     </div>
 
     <div class="section">
       <h2>Available Tools</h2>
       <ul class="tools-list">
-        <li><span class="tool-name">search_assignments</span><br><span class="tool-desc">Search jobs by query, location, skills, seniority, and more</span></li>
-        <li><span class="tool-name">get_assignment</span><br><span class="tool-desc">Get full details for a specific job posting</span></li>
-        <li><span class="tool-name">get_available_filters</span><br><span class="tool-desc">Discover available roles, locations, and filter options</span></li>
-        <li><span class="tool-name">get_recent_assignments</span><br><span class="tool-desc">Get the most recently posted jobs</span></li>
+        ${toolsHtml}
       </ul>
     </div>
 
+    <div class="section">
+      <h2>Example Prompts</h2>
+      <div class="prompts-grid">
+        <div class="prompt-card" onclick="copyPrompt(this, 'Find backend developer jobs in Stockholm that match someone with 5 years of Java experience.')">
+          <div class="prompt-cat">Resume Match</div>
+          <div class="prompt-text">Find backend developer jobs in Stockholm that match someone with 5 years of Java experience.</div>
+          <div class="prompt-copy">Click to copy</div>
+        </div>
+        <div class="prompt-card" onclick="copyPrompt(this, 'Which companies have the most open positions right now?')">
+          <div class="prompt-cat">Market Analysis</div>
+          <div class="prompt-text">Which companies have the most open positions right now?</div>
+          <div class="prompt-copy">Click to copy</div>
+        </div>
+        <div class="prompt-card" onclick="copyPrompt(this, 'Find all jobs requiring Kubernetes and cloud experience.')">
+          <div class="prompt-cat">Tech Stack</div>
+          <div class="prompt-text">Find all jobs requiring Kubernetes and cloud experience.</div>
+          <div class="prompt-copy">Click to copy</div>
+        </div>
+        <div class="prompt-card" onclick="copyPrompt(this, 'Show me the 5 most recently posted jobs.')">
+          <div class="prompt-cat">Quick Search</div>
+          <div class="prompt-text">Show me the 5 most recently posted jobs.</div>
+          <div class="prompt-copy">Click to copy</div>
+        </div>
+      </div>
+    </div>
+
     <div class="links">
-      <a href="https://github.com/jahwag/consultant-jobs-mcp" class="btn btn-primary" target="_blank">GitHub</a>
-      <a href="https://consultant.dev" class="btn btn-ghost">Browse Jobs</a>
+      <a href="https://github.com/Bytelope/mcp-consultant-dev" class="btn btn-primary" target="_blank">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c6.63 0 12 5.27 12 11.79 0 5.07-3.29 9.57-8.18 11.19-.6.12-.82-.26-.82-.57v-3.24c0-1.1-.38-1.81-.81-2.18 2.67-.3 5.48-1.3 5.48-5.82 0-1.3-.47-2.34-1.23-3.17.12-.3.54-1.5-.12-3.13 0 0-1-.32-3.3 1.21a11.32 11.32 0 00-6 0c-2.3-1.53-3.3-1.21-3.3-1.21-.66 1.62-.24 2.83-.12 3.13-.77.83-1.23 1.88-1.23 3.17 0 4.51 2.79 5.52 5.46 5.82-.35.3-.66.81-.77 1.58-.69.31-2.42.81-3.5-.97-.22-.36-.9-1.22-1.84-1.21-1 .02-.41.56.01.78.51.28 1.1 1.33 1.23 1.67.24.66 1.02 1.93 4.04 1.39v2.2c0 .31-.22.68-.83.56C3.3 21.35 0 16.86 0 11.79 0 5.27 5.37 0 12 0z"/></svg>
+        View on GitHub
+      </a>
+      <a href="https://consultant.dev" class="btn btn-ghost">Browse Jobs Manually</a>
     </div>
   </div>
 
   <script>
     function showTab(id) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      document.querySelector(\`[onclick="showTab('\${id}')"]\`).classList.add('active');
+      event.target.classList.add('active');
       document.getElementById(id).classList.add('active');
+    }
+    function showVideo(id) {
+      document.querySelectorAll('.video-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.video-container iframe').forEach(f => f.classList.remove('active'));
+      event.target.closest('.video-tab').classList.add('active');
+      document.getElementById('video-' + id).classList.add('active');
+    }
+    function copyPrompt(el, text) {
+      navigator.clipboard.writeText(text);
+      el.classList.add('copied');
+      el.querySelector('.prompt-copy').textContent = 'Copied!';
+      setTimeout(() => {
+        el.classList.remove('copied');
+        el.querySelector('.prompt-copy').textContent = 'Click to copy';
+      }, 2000);
     }
   </script>
 </body>
