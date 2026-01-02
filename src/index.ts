@@ -602,11 +602,14 @@ export default {
   },
 };
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function getLandingPageHtml(): string {
-  // Generate tools list dynamically from TOOLS array (skip ChatGPT-compat duplicates)
   const toolsHtml = TOOLS
     .filter(t => !["search", "fetch"].includes(t.name))
-    .map(t => `<li><span class="tool-name">${t.name}</span><br><span class="tool-desc">${t.description.split('.')[0]}.</span></li>`)
+    .map(t => `<li><span class="tool-name">${escapeHtml(t.name)}</span><br><span class="tool-desc">${escapeHtml(t.description.split('.')[0])}.</span></li>`)
     .join('\n        ');
 
   return `<!DOCTYPE html>
